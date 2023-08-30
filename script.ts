@@ -81,3 +81,19 @@ function getAvailableSlots(
     }
     return slots;
 }
+
+function getPossibleTimeslots(day: number, calData) {
+    const indx = day == 0 ? 0 : day * 2;
+    const slots = [];
+    if (calData[4][indx] != "on") return slots;
+    for (let i = 6; i < calData.length; i++) {
+        const startTime = calData[i][indx];
+        const endTime = calData[i][indx + 1];
+        if (!startTime || !endTime) continue;
+        const st = new Date(startTime);
+        const et = new Date(endTime);
+        if (et <= st) continue;
+        slots.push({ startTime: st, endTime: et });
+    }
+    return slots;
+}
