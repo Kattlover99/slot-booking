@@ -1,8 +1,8 @@
 function doGet() {
     const template = HtmlService.createTemplateFromFile("page");
-    // const styles = HtmlService.createTemplateFromFile("styles").getRawContent();
-    template.styles = "";
-    template.enabledDays = getEnabledDays();
+    const ss = SpreadsheetApp.getActive();
+    const calendar_config_sheet = ss.getSheetByName(SHEET_NAMES.CALENDAR_CONFIG);
+    template.enabledDays = getEnabledDays(calendar_config_sheet);
     return template
         .evaluate()
         .setSandboxMode(HtmlService.SandboxMode.IFRAME)
@@ -10,9 +10,57 @@ function doGet() {
         .addMetaTag("viewport", "width=device-width, initial-scale=1");
 }
 
-function getEnabledDays() {
+function bookSlot({ date, startTime, endTime, title }) {
+    if (!date) return JSON.stringify({ error: true, message: "missing date." });
+    if (!startTime)
+        return JSON.stringify({ error: true, message: "missing slot." });
+    if (!endTime)
+        return JSON.stringify({ error: true, message: "missing slot." });
+    if (!title) return JSON.stringify({ error: true, message: "missing title." });
+
+    const selectedDate = new Date(date);
+    const st = new Date(date);
+    const et = new Date(date);
+    const tempStart = new Date(startTime);
+    const tempEnd = new Date(endTime);
+    st.setHours(tempStart.getHours());
+    st.setMinutes(tempStart.getMinutes());
+    st.setSeconds(tempStart.getSeconds());
+    et.setHours(tempEnd.getHours());
+    et.setMinutes(tempEnd.getMinutes());
+    et.setSeconds(tempEnd.getSeconds());
+
     const ss = SpreadsheetApp.getActive();
     const calendar_config_sheet = ss.getSheetByName(SHEET_NAMES.CALENDAR_CONFIG);
+    const enabledDays = getEnabledDays(calendar_config_sheet);
+    const day = selectedDate.getDay();
+    if (enabledDays.indexOf(day) == -1)
+        return JSON.stringify({
+            error: true,
+            message: "time slot not available, please try again.",
+            retry: true,
+        });
+
+    const calendarId = calendar_config_sheet.getRange("A2").getValue();
+    const calendar = CalendarApp.getCalendarById(calendarId);
+    const events = calendar.getEvents(st, et);
+    if (events.length)
+        return JSON.stringify({
+            error: true,
+            message: "time slot not available, please try again.",
+            retry: true,
+        });
+
+    calendar.createEvent(title, st, et);
+    return JSON.stringify({
+        success: true,
+        message: "slot booked successfully.",
+    });
+}
+
+function getEnabledDays(
+    calendar_config_sheet: GoogleAppsScript.Spreadsheet.Sheet
+) {
     const calData = calendar_config_sheet
         .getRange(
             1,
@@ -21,7 +69,6 @@ function getEnabledDays() {
             calendar_config_sheet.getLastColumn()
         )
         .getValues();
-    const calendarId = calData[1][0];
     const enabledDays = [];
 
     let dayNumber = -1;
