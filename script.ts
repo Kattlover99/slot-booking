@@ -33,3 +33,67 @@ function getEnabledDays() {
     }
     return enabledDays;
 }
+
+function getAvailableTimeslots({ date }) {
+    const selectedDate = new Date(date);
+    const ss = SpreadsheetApp.getActive();
+    const calendar_config_sheet = ss.getSheetByName(SHEET_NAMES.CALENDAR_CONFIG);
+    const calData = calendar_config_sheet
+        .getRange(
+            1,
+            1,
+            calendar_config_sheet.getLastRow(),
+            calendar_config_sheet.getLastColumn()
+        )
+        .getValues();
+    const calendarId = calData[1][0];
+    let slots = [];
+    const possibleSlots = getPossibleTimeslots(selectedDate.getDay(), calData);
+    if (!possibleSlots.length) return JSON.stringify({ slots });
+    const calendar = CalendarApp.getCalendarById(calendarId);
+    slots = getAvailableSlots(possibleSlots, calendar, date);
+    return JSON.stringify({ slots });
+}
+
+function getAvailableSlots(
+    possibleSlots: Array<object>,
+    calendar: GoogleAppsScript.Calendar.Calendar,
+    date
+) {
+    const slots = [];
+    for (let i = 0; i < possibleSlots.length; i++) {
+        const { startTime, endTime } = possibleSlots[i];
+
+        const st = new Date(date);
+        const et = new Date(date);
+        const tempStart = new Date(startTime);
+        const tempEnd = new Date(endTime);
+        st.setHours(tempStart.getHours());
+        st.setMinutes(tempStart.getMinutes());
+        st.setSeconds(tempStart.getSeconds());
+        et.setHours(tempEnd.getHours());
+        et.setMinutes(tempEnd.getMinutes());
+        et.setSeconds(tempEnd.getSeconds());
+
+        const events = calendar.getEvents(st, et);
+        if (events.length) continue;
+        slots.push(possibleSlots[i]);
+    }
+    return slots;
+}
+
+function getPossibleTimeslots(day: number, calData) {
+    const indx = day == 0 ? 0 : day * 2;
+    const slots = [];
+    if (calData[4][indx] != "on") return slots;
+    for (let i = 6; i < calData.length; i++) {
+        const startTime = calData[i][indx];
+        const endTime = calData[i][indx + 1];
+        if (!startTime || !endTime) continue;
+        const st = new Date(startTime);
+        const et = new Date(endTime);
+        if (et <= st) continue;
+        slots.push({ startTime: st, endTime: et });
+    }
+    return slots;
+}
